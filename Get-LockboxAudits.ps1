@@ -19,6 +19,27 @@
 
 .PARAMETER upperRangeDate
     Specifies the latest date to search, written as YYYY-MM-DD. Search ends at 11:59 UTC on the specified day
+
+NOTES:
+    - The restUri and restPassword need to be for an account which has both Audit API access, such as System Administrator group members, and a Password Login Method.
+    - To capture all events up to the script run time, it is recommended that the upperRangeDate parameter be set to tomorrow's date.
+    - Disclaimer for RelativityOne environment usage:
+        - This script is limited to public Audit APIs for retrieving audit events.
+        - Due to technical limitations of the public Audit APIs and the automatic deletion of Relativity Employee accounts, audits of deleted Relativity Employees are only available via this script for as long as the employee accounts exist in the Relativity environment.
+        - It is recommended that the script be run at least daily to capture Relativity Employee audits before the user accounts are removed. The script can be run as often as desired to ensure all Relativity Employee access is captured.
+
+EXAMPLE POWERSHELL USAGE
+    > cd <script dir>
+    > . .\Get-LockboxAudits.ps1 
+    > Get-Help  Get-Audits-For-Users-In-Workspace -detailed
+    > $SecureStringPassword = Read-Host -AsSecureString
+    > <enter password for Relativity account>
+    > $restUri = "https://my.relativity.baseurl"
+    > $restUserName = "admin.account@relativity.com"
+    > $lowerRangeDate = "2021-10-27"
+    > $upperRangeDate = '2021-10-29"
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate | Out-File -FilePath .\Audits.txt
 #>
 function Get-Audits-For-Users-In-Workspace{
          param (
@@ -191,7 +212,7 @@ function Get-Audits-For-Users-In-Workspace{
                             "Name" = "Timestamp"
                         }
                     )
-                    "rowCondition"="(('User Name' IN CHOICE [$userAuditChoiceList] AND 'Timestamp' >= '$lowerRangeDate`T00:00:59.00Z' AND 'Timestamp' <= '$upperRangeDate`T11:59:59.00Z' AND 'Workspace Name' IN CHOICE [$workspaceExcludeChoiceList]))"
+                    "rowCondition"="(('User Name' IN CHOICE [$userAuditChoiceList] AND 'Timestamp' >= '$lowerRangeDate`T00:00:00.00Z' AND 'Timestamp' <= '$upperRangeDate`T11:59:59.00Z' AND 'Workspace Name' IN CHOICE [$workspaceExcludeChoiceList]))"
                     "condition" = ""
                     "sorts" = @()
                     "relationalField" = $null
