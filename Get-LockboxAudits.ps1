@@ -25,7 +25,7 @@ NOTES:
     - To capture all events up to the script run time, it is recommended that the upperRangeDate parameter be set to tomorrow's date.
     - Disclaimer for RelativityOne environment usage:
         - This script is limited to public Audit APIs for retrieving audit events.
-        - Due to technical limitations of the public Audit APIs and the automatic deletion of Relativity Employee accounts, audits of deleted Relativity Employees are only available via this script for as long as the employee accounts exist.
+        - Due to technical limitations of the public Audit APIs and the automatic deletion of Relativity Employee accounts, audits of deleted Relativity Employees are only available via this script for as long as the employee accounts exist in the Relativity environment.
         - It is recommended that the script be run at least daily to capture Relativity Employee audits before the user accounts are removed. The script can be run as often as desired to ensure all Relativity Employee access is captured.
 
 EXAMPLE POWERSHELL USAGE
@@ -36,10 +36,10 @@ EXAMPLE POWERSHELL USAGE
     > <enter password for Relativity account>
     > $restUri = "https://my.relativity.baseurl"
     > $restUserName = "admin.account@relativity.com"
-    > $lowerRangeDate = 2021-10-27
-    > $upperRangeDate = 2021-10-29
-    > Get-Audits-For-Users-In-Workspace -restUri "https://p-dv-vm-SEA7PIE" -restUserName "relativity.admin@kcura.com" -restPassword $SecureStringPassword -lowerRangeDate "2021-10-25" -upperRangeDate "2021-10-29"
-    > Get-Audits-For-Users-In-Workspace -restUri "https://p-dv-vm-SEA7PIE" -restUserName "relativity.admin@kcura.com" -restPassword $SecureStringPassword -lowerRangeDate "2021-10-25" -upperRangeDate "2021-10-29" | Out-File -FilePath .\Audits.txt
+    > $lowerRangeDate = "2021-10-27"
+    > $upperRangeDate = '2021-10-29"
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate | Out-File -FilePath .\Audits.txt
 #>
 function Get-Audits-For-Users-In-Workspace{
          param (
