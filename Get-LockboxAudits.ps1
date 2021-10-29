@@ -20,8 +20,20 @@
 .PARAMETER upperRangeDate
     Specifies the latest date to search, written as YYYY-MM-DD. Search ends at 11:59 UTC on the specified day
 
+.PARAMETER groupByWorkspace
+    (Optional) Include this flag to group audit events by the workspace the event occurred within. Cannot be combined with other groupBy parameters.
+
+.PARAMETER groupByUser
+    (Optional) Include this flag to group audit events by the User Name each action was taken by.  Cannot be combined with other groupBy parameters.
+
+.PARAMETER groupByAction
+    (Optional) Include this flag to group audit events by the audit Action type. Cannot be combined with other groupBy parameters.
+
+.PARAMETER getAdminCaseAudits
+    (Optional) Include this flag to show audits that took place in the Admin Case configuration workspace. This will show audits for system configuration changes such as Login events, User and Group object changes, and Instance Setting edits.
+
 NOTES:
-    - The restUri and restPassword need to be for an account which has both Audit API access, such as System Administrator group members, and a Password Login Method.
+    - The restUserName and restPassword need to be for an account which has both Audit API access, such as System Administrator group members, and a Password Login Method.
     - To capture all events up to the script run time, it is recommended that the upperRangeDate parameter be set to tomorrow's date.
     - Disclaimer for RelativityOne environment usage:
         - This script is limited to public Audit APIs for retrieving audit events.
@@ -38,9 +50,12 @@ EXAMPLE POWERSHELL USAGE
     > $restUserName = "admin.account@relativity.com"
     > $lowerRangeDate = "2021-10-27"
     > $upperRangeDate = '2021-10-29"
-    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate
-    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate | Out-File -FilePath .\Audits.txt
+    Output Audits to Console, grouped by Workspace: 
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByWorkspace
+    Group audits by User Name, including audits for the Admin Case, and Save Audits to a .csv file:
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByUser| Out-File -FilePath .\Audits.csv
 #>
+
 function Get-Audits-For-Users-In-Workspace{
          param (
         [Parameter(Mandatory)]
@@ -61,9 +76,19 @@ function Get-Audits-For-Users-In-Workspace{
 
         [Parameter(Mandatory)]
         [string]
-        $upperRangeDate
+        $upperRangeDate,
+
+        [Switch]$groupByWorkspace,
+
+        [Switch]$groupByUser,
+
+        [Switch]$groupByAction,
+
+        [Switch]$getAdminCaseAudits
 
     )
+            Write-Host "Executing script"        
+
             $credentials = New-Object System.Management.Automation.PSCredential -ArgumentList $restUserName, $restPassword
             $authHeader = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $restUserName, $credentials.GetNetworkCredential().Password)))
 
@@ -73,7 +98,7 @@ function Get-Audits-For-Users-In-Workspace{
             Write-Host "Gathering users for query"
 
             $userAPIEndpoint = "/Relativity.REST/api/Relativity-Identity/v1/workspaces/-1/query-users"
-            $userExcludeNames = @("automatedworkflows@relativity.com", "automation.serviceaccount@relativity.com", "clowder@relativity.com", "conversionpasswords@relativity.com", "newrelicsynthetics@relativity.com",	"relativity.admin@relativity.com", "relativity.serviceaccount@relativity.com", "serviceaccount@relativity.com", "smoketestuser@relativity.com")
+            $userExcludeNames = @("automatedworkflows@relativity.com", "automation.serviceaccount@relativity.com", "clowder@relativity.com", "conversionpasswords@relativity.com", "newrelicsynthetics@relativity.com", "relativity.admin@relativity.com", "relativity.serviceaccount@relativity.com", "serviceaccount@relativity.com", "smoketestuser@relativity.com")
             $userExcludeList =  ($userExcludeNames | Select-Object @{name="Clause";expression= {"'Email' <> '$($_.FullName)'"}}).Clause -join " AND "
             $usernameBody = @{
                 "Query" = @{
@@ -102,7 +127,7 @@ function Get-Audits-For-Users-In-Workspace{
                         $retryCount = $retryCount + 1
                     }
                 }
-            } While ($stopLoop -eq $false)
+            } while ($stopLoop -eq $false)
             $retryCount = 0
             $stopLoop = $false
 
@@ -141,13 +166,19 @@ function Get-Audits-For-Users-In-Workspace{
                         $retryCount = $retryCount + 1
                     }
                 }
-            } While ($stopLoop -eq $false)
+            } while ($stopLoop -eq $false)
             $retryCount = 0
             $stopLoop = $false
 
             Write-Host "Querying for workspaces to exclude"
 
-            $workspaceExcludeNames = @("[DO NOT ACCESS] - RelativityOne Automation", "[DO NOT ACCESS] - RelativityOne Maintenance", "[DO NOT ACCESS] - RelativityOne Template",	"New Case Template", "Relativity Starter Template", "Admin Case")
+            if ($getAdminCaseAudits.IsPresent) {
+                $workspaceExcludeNames = @("[DO NOT ACCESS] - RelativityOne Automation", "[DO NOT ACCESS] - RelativityOne Maintenance", "[DO NOT ACCESS] - RelativityOne Template",	"New Case Template", "Relativity Starter Template")
+            }
+            else {
+                $workspaceExcludeNames = @("[DO NOT ACCESS] - RelativityOne Automation", "[DO NOT ACCESS] - RelativityOne Maintenance", "[DO NOT ACCESS] - RelativityOne Template",	"New Case Template", "Relativity Starter Template", "Admin Case") 
+            }
+            
             $workspaceExcludeString = ($workspaceExcludeNames | Select-Object  @{name="Clause";expression= {"'Name' <> '$_'"}}).Clause -join " AND "
             $workspaceBody = @{
                 "workspaceId" = -1
@@ -180,7 +211,7 @@ function Get-Audits-For-Users-In-Workspace{
                         $retryCount = $retryCount + 1
                     }
                 }
-            } While ($stopLoop -eq $false)
+            } while ($stopLoop -eq $false)
             $retryCount = 0
             $stopLoop = $false
 
@@ -207,9 +238,15 @@ function Get-Audits-For-Users-In-Workspace{
                         },
                         @{
                             "Name" = "Workspace Name"
-                        }
+                        },
                         @{
                             "Name" = "Timestamp"
+                        },
+                        @{
+                            "Name" = "Object Type"
+                        },
+                        @{
+                            "Name" = "Object Name"
                         }
                     )
                     "rowCondition"="(('User Name' IN CHOICE [$userAuditChoiceList] AND 'Timestamp' >= '$lowerRangeDate`T00:00:00.00Z' AND 'Timestamp' <= '$upperRangeDate`T11:59:59.00Z' AND 'Workspace Name' IN CHOICE [$workspaceExcludeChoiceList]))"
@@ -259,10 +296,89 @@ function Get-Audits-For-Users-In-Workspace{
                     "User Name" = $audit.Values[2].Name
                     "Action" = $audit.Values[1].Name
                     "Timestamp" = $audit.Values[4]
+                    "Object Type" = $audit.Values[5].Name
+                    "Object Name" = $audit.Values[6]
                 }
-                
             }
 
-            return $parsedAudits | ConvertTo-Json -Depth 5
-            
+            Write-Host "Formatting results"
+
+            $csvFormattedResults = "";
+
+            if ($groupByWorkspace.IsPresent) {
+                $_groupingField = "Workspace Name"
+                Write-Host "Grouping audit data by $_groupingField"
+                $_allAudits = Group-ByAuditField $parsedAudits $_groupingField
+                $csvFormattedResults = Get-GroupedCsvData $_allAudits $_groupingField
+            }
+            elseif ($groupByUser.IsPresent) {  
+                $_groupingField = "User Name"
+                Write-Host "Grouping audit data by $_groupingField"
+                $_allAudits = Group-ByAuditField $parsedAudits $_groupingField
+                $csvFormattedResults = Get-GroupedCsvData $_allAudits $_groupingField
+            }
+            elseif ($groupByAction.IsPresent) {
+                $_groupingField = "Action"
+                Write-Host "Grouping audit data by $_groupingField"
+                $_allAudits = Group-ByAuditField $parsedAudits $_groupingField
+                $csvFormattedResults = Get-GroupedCsvData $_allAudits $_groupingField
+            }
+            else {
+                $csvFormattedResults = Get-CsvData $parsedAudits
+            }
+
+            return $csvFormattedResults
 }
+
+function Group-ByAuditField($allAudits, $groupingField){
+    $auditDictionary = @{}
+
+    foreach($audit in $allAudits) {
+        if ($auditDictionary.Contains($audit["$groupingField"])) {
+            $auditsList = $auditDictionary[$audit["$groupingField"]]
+            $auditsList.Add($audit) | Out-Null
+        }
+        else {
+            [System.Collections.ArrayList]$auditsList = @()
+            $auditsList.Add($audit) | Out-Null
+            $auditDictionary.Add($audit["$groupingField"], $auditsList) | Out-Null
+        }
+    }
+
+    return $auditDictionary
+}
+
+function Get-GroupedCsvData($groupedAudits, $groupingField) {
+    $output = "";
+    foreach($groupKey in $groupedAudits.Keys){
+        $output += "Relativity Employee Audit Events for $groupingField '$groupKey'`n"
+        $output += $_headers
+        $groupAuditEvents = $groupedAudits["$groupKey"]
+
+        foreach ($auditEvent in $groupAuditEvents) {
+            $eventCsv = $auditEvent["Audit ID"],$auditEvent["Timestamp"],$auditEvent["Workspace Name"].Replace(",",""),$auditEvent["User Name"].Replace(",",""),$auditEvent["Action"],$auditEvent["Object Type"],$auditEvent["Object Name"].Replace(",","") -Join ","
+            $output += "$eventCsv`n"
+        }
+        $output += "`n"
+    }
+
+    return $output
+}
+
+function Get-CsvData($audits) {
+    $output = "";
+    $output += "All Relativity Employee Audit Events`n"
+    $output += $_headers
+    
+    foreach ($auditEvent in $audits) {
+        $eventCsv = $auditEvent["Audit ID"],$auditEvent["Timestamp"],$auditEvent["Workspace Name"].Replace(",",""),$auditEvent["User Name"].Replace(",",""),$auditEvent["Action"],$auditEvent["Object Type"],$auditEvent["Object Name"].Replace(",","") -Join ","
+        $output += "$eventCsv`n"
+    }
+    $output += "`n"
+    
+    return $output
+}
+
+$_groupingField = ""
+$_allAudits = @()
+$_headers = "AuditID","Timestamp(UTC)","WorkspaceName","UserName","Action","ObjectType", "ObjectName`n" -Join "," 
