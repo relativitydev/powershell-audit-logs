@@ -36,8 +36,9 @@
 
 NOTES:
     - The restUserName and restPassword need to be for an account which has both Audit API access, such as System Administrator group members, and a Password Login Method.
-    - To capture all events up to the script run time, it is recommended that the upperRangeDate parameter be set to tomorrow's date.
-    - Both the $lowerRangeDate and $upperRangeDate are in UTC time.
+    - Both the $lowerRangeDate and $upperRangeDate are in UTC time. As a result, the script may need to be run with the $upperRangeDate set to tomorrow's date, or even 
+      two days in the future to account for time differences between the local time and UTC time. Taking this into account will ensure no audits are excluded by differences 
+      in UTC time and local time.
     - The required script execution time is in proportion to the number of Relativity Employee user accounts in the R1 environment and the number of audits found. 
     - Disclaimer for RelativityOne environment usage:
         - This script is limited to public Audit APIs for retrieving audit events.
@@ -58,11 +59,15 @@ EXAMPLE POWERSHELL USAGE
     > $restUserName = "admin.account@relativity.com"
     > $lowerRangeDate = "2021-10-27"
     > $upperRangeDate = '2021-10-29"
-    Example Use 1: Output Audits to Console, grouped by Workspace: 
-    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByWorkspace
-    Example Use 2: Group audits by User Name, including audits for the Admin Case, and Save Audits to a .csv file:
+    Example Use 1: Output Audits excluding Admin Case audits, with no groupings, and save to a .csv file. This will create a single large .csv formatted output.
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate | Out-File -FilePath .\Audits.csv
+    Example Use 2: Output Audits including Admin Case audits, with no grouping, and save to a .csv file. This will create a single large .csv formatted output.
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -getAdminCaseAudits | Out-File -FilePath .\Audits.csv
+    Example Use 3: Group audits by Workspace, and save to a .csv file. This will create a .csv file with breaks between groupings of audits all occurring within the same workspace.
+    > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByWorkspace | Out-File -FilePath .\Audits.csv
+    Example Use 4: Group audits by User Name, including audits for the Admin Case, and Save Audits to a .csv file. This will create a .csv file with breaks between groupings of audits for specific users.
     > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByUser -getAdminCaseAudits | Out-File -FilePath .\Audits.csv
-    Example Use 3: Group audits by Audit Action Type, including audits for the Admin Case, and Save Audits to a .csv file:
+    Example Use 5: Group audits by Audit Action Type, including audits for the Admin Case, and Save Audits to a .csv file. This will create a .csv file with breaks between groupings of audits of the same action type.
     > Get-Audits-For-Users-In-Workspace -restUri $restUri -restUserName $restUserName -restPassword $SecureStringPassword -lowerRangeDate $lowerRangeDate -upperRangeDate $upperRangeDate -groupByAction -getAdminCaseAudits | Out-File -FilePath .\Audits.csv
 #>
 
@@ -307,7 +312,7 @@ function Get-Audits-For-Users-In-Workspace{
                                 "Name" = "Object Name"
                             }
                         )
-                        "rowCondition"="(('User Name' IN CHOICE [$userAuditChoiceList] AND 'Timestamp' >= '$lowerRangeDate`T00:00:00.00Z' AND 'Timestamp' <= '$upperRangeDate`T11:59:59.99Z' AND NOT('Workspace Name' IN CHOICE [$workspaceExcludeChoiceList])))"
+                        "rowCondition"="(('User Name' IN CHOICE [$userAuditChoiceList] AND 'Timestamp' >= '$lowerRangeDate`T00:00:00.00Z' AND 'Timestamp' <= '$upperRangeDate`T23:59:59.99Z' AND NOT('Workspace Name' IN CHOICE [$workspaceExcludeChoiceList])))"
                         "condition" = ""
                         "sorts" = @()
                         "relationalField" = $null
@@ -363,7 +368,7 @@ function Get-Audits-For-Users-In-Workspace{
 
             foreach($choice in $choices) {
                 $percentComplete = ($userCounter / $totalUsersCount) * 100.0
-                Write-Progress  -Activity "Querying $totalUsersCount Relativity Employee User Audits" -Status "$userCounter / $totalUsersCount ($percentComplete%) Complete" -PercentComplete $percentComplete
+                Write-Progress  -Activity "Querying Audits for $totalUsersCount Relativity Employee User(s) between 00:00:00.00 $lowerRangeDate UTC and 23:59:59.99 $upperRangeDate UTC" -Status "$userCounter / $totalUsersCount ($percentComplete%) Complete" -PercentComplete $percentComplete
                 $runningJobs = (Get-Job).Count
                 $userChoiceID = $choice.ArtifactID
 
@@ -521,7 +526,6 @@ function Get-GroupedCsvData($groupedAudits, $groupingField) {
 
 function Get-CsvData($audits) {
     $output = "";
-    $output += "All Relativity Employee Audit Events`n"
     $output += $_headers
     
     foreach ($auditEvent in $audits) {
